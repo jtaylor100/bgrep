@@ -7,6 +7,7 @@ import scalaj.http._
 import scala.concurrent._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
+import scala.io.StdIn
 
 case class Book(title: String, link: String, description: String, ratings: Int)
 
@@ -16,6 +17,7 @@ class Config(arguments: Seq[String]) extends ScallopConf(arguments) {
   val searchTerms: ScallopOption[String] = trailArg[String](required = true)
   val shelf: ScallopOption[String] = trailArg[String](required = true)
   val key: ScallopOption[String] = opt[String](required = true)
+  val interactive: ScallopOption[Boolean] = opt[Boolean]()
   verify()
 }
 
@@ -30,6 +32,7 @@ object BGrep extends App {
       |
       |  -h, --help             Show this help.
       |  -k, --key API-KEY      Key for the Goodreads.com API. See https://www.goodreads.com/api/keys
+      |  -i, --interactive      Prompt for search queries instead of exiting after the results for first are shown.
     """.stripMargin
 
   if (args.length == 0) {
@@ -47,7 +50,8 @@ object BGrep extends App {
 
   val baseUrl = s"https://www.goodreads.com/review/list/${conf.shelf.get.get}.xml?key=${conf.key.get.get}&v=2"
   val numberOfBooks = (scala.xml.XML.loadString(Http(baseUrl + "&per_page=1").asString.body) \ "reviews" \@ "total").toInt
-  val urls = for (pageNo <- 1 to numberOfBooks / 200 + 1) yield s"$baseUrl&per_page=200&page=$pageNo"
+  val booksPerPage = 200
+  val urls = for (pageNo <- 1 to numberOfBooks / booksPerPage + 1) yield s"$baseUrl&per_page=$booksPerPage&page=$pageNo"
 
   val bookFutures = urls.map(u => Future {
     // TODO: Docker style status updates.
@@ -86,4 +90,16 @@ object BGrep extends App {
     // TODO: Output URL with title, or make information outputted configurable.
     System.out.println(result(title))
   })
+
+  if (conf.interactive.toOption.get) {
+    while(true) {
+      System.out.print("> ")
+      val query = StdIn.readLine()
+      System.out.println()
+      lucene.query().filter(query).sort(Sort(ratings, reverse = true)).limit(500).search().results.foreach(result => {
+        // TODO: Output URL with title, or make information outputted configurable.
+        System.out.println(result(title))
+      })
+    }
+  }
 }
