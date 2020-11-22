@@ -1,6 +1,6 @@
 
 import com.outr.lucene4s._
-import com.outr.lucene4s.query.Sort
+import com.outr.lucene4s.query.{SearchResult, Sort}
 import org.rogach.scallop.{ScallopConf, ScallopOption}
 import scalaj.http._
 
@@ -9,8 +9,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.io.StdIn
 
-case class Book(title: String, link: String, description: String, ratings: Int)
-
+case class Book(title: String, link: String, description: String, ratings: Int, authors: Seq[String])
 
 // TODO: Add tests for common cases.
 object BGrep extends App {
@@ -52,12 +51,12 @@ object BGrep extends App {
     (responseBody \ "reviews" \ "review")
       .map(r => r \ "book")
       .map(b =>
-        Book((b \ "title").text, (b \ "link").text, (b \ "description").text, (b \ "ratings_count").text.toInt)
+        Book((b \ "title").text, (b \ "link").text, (b \ "description").text, (b \ "ratings_count").text.toInt, (b \ "authors" \\ "name").map(_.text))
       )
   }(ExecutionContext.global))
 
   val futureBooks = Future.sequence(bookFutures.toList)
-  val bList = Await.result(futureBooks, Duration.Inf)
+  val bookList = Await.result(futureBooks, Duration.Inf)
 
   // TODO: Put the index in a sensible place.
   val lucene = new DirectLucene(Nil, defaultFullTextSearchable = true)
@@ -65,24 +64,27 @@ object BGrep extends App {
   val link = lucene.create.field[String]("link")
   val description = lucene.create.field[String]("description")
   val ratings = lucene.create.field[Int]("ratings")
+  val author = lucene.create.field[String]("author")
 
   System.err.println("Indexing")
-  bList.flatten.foreach(b => lucene.doc().fields(title(b.title), link(b.link), description(b.description), ratings(b.ratings)).index())
+  bookList.flatten.foreach(b => lucene.doc().fields(title(b.title), link(b.link), description(b.description), ratings(b.ratings), author(b.authors.mkString("; "))).index())
 
   if (Config.query.isSupplied) {
-    lucene.query().filter(Config.query()).sort(Sort(ratings, reverse = true)).limit(500).search().results.foreach(result => {
-      // TODO: Output URL with title, or make information outputted Configigurable.
-      System.out.println(result(title))
-    })
+    lucene.query().filter(Config.query()).sort(Sort(ratings, reverse = true)).limit(500).search().results.foreach(print)
   } else {
     while(true) {
       System.out.print("> ")
       val query = StdIn.readLine()
       System.out.println()
-      lucene.query().filter(query).sort(Sort(ratings, reverse = true)).limit(500).search().results.foreach(result => {
-        // TODO: Output URL with title, or make information outputted Configigurable.
-        System.out.println(result(title))
-      })
+      lucene.query().filter(query).sort(Sort(ratings, reverse = true)).limit(500).search().results.foreach(print)
     }
+  }
+
+  def print(result: SearchResult) = {
+    println(result(title))
+    // TODO: Display multi-author books correctly
+    println("by " + result(author))
+    println("  " + result(link))
+    println()
   }
 }
