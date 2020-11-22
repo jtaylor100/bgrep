@@ -14,7 +14,6 @@ case class Book(title: String, link: String, description: String, ratings: Int)
 
 // TODO: Add tests for common cases.
 object BGrep extends App {
-  // TODO: Learn how to use the arguments config properly (not .get.get)
   // TODO: Allow key to to be defined from ENV.
   object Config extends ScallopConf(args) {
     version(s"bgrep DEVELOPMENT BUILD by Joshua Taylor")
@@ -25,7 +24,7 @@ object BGrep extends App {
     val help: ScallopOption[Boolean] = opt[Boolean]("help", descr = "Display help information")
     val query: ScallopOption[String] = trailArg[String]("query", required = true, descr = "Keywords to search")
     val shelf: ScallopOption[String] = trailArg[String]("shelf-id", required = true)
-    val key: ScallopOption[String] = opt[String]("api-key", required = true)
+    val key: ScallopOption[String] = opt[String]("api-key", short = 'k', required = true)
     val interactive: ScallopOption[Boolean] = opt[Boolean]("interactive", descr = "Ask repeatedly for new search terms", default = Some(false))
     verify()
   }
@@ -35,7 +34,7 @@ object BGrep extends App {
     System.exit(0)
   }
 
-  val baseUrl = s"https://www.goodreads.com/review/list/${Config.shelf.get.get}.xml?key=${Config.key.get.get}&v=2"
+  val baseUrl = s"https://www.goodreads.com/review/list/${Config.shelf()}.xml?key=${Config.key()}&v=2"
   val numberOfBooks = (scala.xml.XML.loadString(Http(baseUrl + "&per_page=1").asString.body) \ "reviews" \@ "total").toInt
   val booksPerPage = 200
   val urls = for (pageNo <- 1 to numberOfBooks / booksPerPage + 1) yield s"$baseUrl&per_page=$booksPerPage&page=$pageNo"
@@ -73,7 +72,7 @@ object BGrep extends App {
   bList.flatten.foreach(b => lucene.doc().fields(title(b.title), link(b.link), description(b.description), ratings(b.ratings)).index())
 
   System.err.println("Searching")
-  lucene.query().filter(Config.query.get.get).sort(Sort(ratings, reverse = true)).limit(500).search().results.foreach(result => {
+  lucene.query().filter(Config.query()).sort(Sort(ratings, reverse = true)).limit(500).search().results.foreach(result => {
     // TODO: Output URL with title, or make information outputted Configigurable.
     System.out.println(result(title))
   })
