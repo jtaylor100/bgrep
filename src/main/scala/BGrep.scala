@@ -18,14 +18,12 @@ object BGrep extends App {
   object Config extends ScallopConf(args) {
     version(s"bgrep DEVELOPMENT BUILD by Joshua Taylor")
     banner(
-      """Usage: bgrep [OPTION]... QUERY SHELF-ID
-        |Search for QUERY in each book contained in the goodreads.com shelf SHELF-ID.
+      """Usage: bgrep [OPTION]... shelf-id [query]
         |Example: bgrep software 56943009""".stripMargin)
     val help: ScallopOption[Boolean] = opt[Boolean]("help", descr = "Display help information")
-    val query: ScallopOption[String] = trailArg[String]("query", required = true, descr = "Keywords to search")
     val shelf: ScallopOption[String] = trailArg[String]("shelf-id", required = true)
+    val query: ScallopOption[String] = trailArg[String]("query", descr = "Keywords to search; leave blank for interactive input", required = false)
     val key: ScallopOption[String] = opt[String]("api-key", short = 'k', required = true)
-    val interactive: ScallopOption[Boolean] = opt[Boolean]("interactive", descr = "Ask repeatedly for new search terms", default = Some(false))
     verify()
   }
 
@@ -71,13 +69,12 @@ object BGrep extends App {
   System.err.println("Indexing")
   bList.flatten.foreach(b => lucene.doc().fields(title(b.title), link(b.link), description(b.description), ratings(b.ratings)).index())
 
-  System.err.println("Searching")
-  lucene.query().filter(Config.query()).sort(Sort(ratings, reverse = true)).limit(500).search().results.foreach(result => {
-    // TODO: Output URL with title, or make information outputted Configigurable.
-    System.out.println(result(title))
-  })
-
-  if (Config.interactive.toOption.get) {
+  if (Config.query.isSupplied) {
+    lucene.query().filter(Config.query()).sort(Sort(ratings, reverse = true)).limit(500).search().results.foreach(result => {
+      // TODO: Output URL with title, or make information outputted Configigurable.
+      System.out.println(result(title))
+    })
+  } else {
     while(true) {
       System.out.print("> ")
       val query = StdIn.readLine()
