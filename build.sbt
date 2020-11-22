@@ -1,6 +1,6 @@
 name := "bgrep"
 
-version := "0.1"
+version := "dev"
 
 scalaVersion := "2.12.0"
 

@@ -11,44 +11,31 @@ import scala.io.StdIn
 
 case class Book(title: String, link: String, description: String, ratings: Int)
 
-// TODO: Allow key to to be defined from ENV.
-class Config(arguments: Seq[String]) extends ScallopConf(arguments) {
-  val help: ScallopOption[Boolean] = opt[Boolean]()
-  val searchTerms: ScallopOption[String] = trailArg[String](required = true)
-  val shelf: ScallopOption[String] = trailArg[String](required = true)
-  val key: ScallopOption[String] = opt[String](required = true)
-  val interactive: ScallopOption[Boolean] = opt[Boolean]()
-  verify()
-}
 
 // TODO: Add tests for common cases.
 object BGrep extends App {
-  // TODO: Use auto-generated docs from Scallop
-  val usage =
-    """
-      |Usage: bgrep [OPTION]... SEARCH-TERMS SHELF-ID
-      |Search for SEARCH-TERM in each book contained in the goodreads.com shelf SHELF-ID.
-      |Example: bgrep software 56943009
-      |
-      |  -h, --help             Show this help.
-      |  -k, --key API-KEY      Key for the Goodreads.com API. See https://www.goodreads.com/api/keys
-      |  -i, --interactive      Prompt for search queries instead of exiting after the results for first are shown.
-    """.stripMargin
-
-  if (args.length == 0) {
-    print(usage)
-    System.exit(2)
+  // TODO: Learn how to use the arguments config properly (not .get.get)
+  // TODO: Allow key to to be defined from ENV.
+  object Config extends ScallopConf(args) {
+    version(s"bgrep DEVELOPMENT BUILD by Joshua Taylor")
+    banner(
+      """Usage: bgrep [OPTION]... QUERY SHELF-ID
+        |Search for QUERY in each book contained in the goodreads.com shelf SHELF-ID.
+        |Example: bgrep software 56943009""".stripMargin)
+    val help: ScallopOption[Boolean] = opt[Boolean]("help", descr = "Display help information")
+    val query: ScallopOption[String] = trailArg[String]("query", required = true, descr = "Keywords to search")
+    val shelf: ScallopOption[String] = trailArg[String]("shelf-id", required = true)
+    val key: ScallopOption[String] = opt[String]("api-key", required = true)
+    val interactive: ScallopOption[Boolean] = opt[Boolean]("interactive", descr = "Ask repeatedly for new search terms", default = Some(false))
+    verify()
   }
 
-  // TODO: Learn how to use the arguments config properly (not .get.get)
-  val conf = new Config(args)
-
-  if (conf.help.getOrElse(false)) {
-    print(usage)
+  if (Config.help()) {
+    Config.printHelp()
     System.exit(0)
   }
 
-  val baseUrl = s"https://www.goodreads.com/review/list/${conf.shelf.get.get}.xml?key=${conf.key.get.get}&v=2"
+  val baseUrl = s"https://www.goodreads.com/review/list/${Config.shelf.get.get}.xml?key=${Config.key.get.get}&v=2"
   val numberOfBooks = (scala.xml.XML.loadString(Http(baseUrl + "&per_page=1").asString.body) \ "reviews" \@ "total").toInt
   val booksPerPage = 200
   val urls = for (pageNo <- 1 to numberOfBooks / booksPerPage + 1) yield s"$baseUrl&per_page=$booksPerPage&page=$pageNo"
@@ -86,18 +73,18 @@ object BGrep extends App {
   bList.flatten.foreach(b => lucene.doc().fields(title(b.title), link(b.link), description(b.description), ratings(b.ratings)).index())
 
   System.err.println("Searching")
-  lucene.query().filter(conf.searchTerms.get.get).sort(Sort(ratings, reverse = true)).limit(500).search().results.foreach(result => {
-    // TODO: Output URL with title, or make information outputted configurable.
+  lucene.query().filter(Config.query.get.get).sort(Sort(ratings, reverse = true)).limit(500).search().results.foreach(result => {
+    // TODO: Output URL with title, or make information outputted Configigurable.
     System.out.println(result(title))
   })
 
-  if (conf.interactive.toOption.get) {
+  if (Config.interactive.toOption.get) {
     while(true) {
       System.out.print("> ")
       val query = StdIn.readLine()
       System.out.println()
       lucene.query().filter(query).sort(Sort(ratings, reverse = true)).limit(500).search().results.foreach(result => {
-        // TODO: Output URL with title, or make information outputted configurable.
+        // TODO: Output URL with title, or make information outputted Configigurable.
         System.out.println(result(title))
       })
     }
