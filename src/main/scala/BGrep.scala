@@ -15,7 +15,7 @@ case class Book(title: String, link: String, description: String, ratings: Int, 
 object BGrep extends App {
   // TODO: Allow key to to be defined from ENV.
   object Config extends ScallopConf(args) {
-    version(s"bgrep DEVELOPMENT BUILD by Joshua Taylor")
+    version(s"bgrep DEVELOPMENT BUILD by Joshua Richard Taylor")
     banner(
       """Usage: bgrep [OPTION]... shelf-id [query]
         |Example: bgrep software 56943009""".stripMargin)
